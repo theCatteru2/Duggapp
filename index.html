@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>DuggApp - Gaming Hub</title>
+  
+  <!-- Firebase SDK v8 (Compatibilidad Web) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- Leaflet & Leaflet.Draw Engine -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+  <!-- Tailwind CSS & Tipografía -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #090c10;
+      color: #e2e8f0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .font-mono { font-family: 'DM Mono', monospace; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Modos de edición visual */
+    .edit-outline {
+      outline: 2px dashed #f59e0b !important;
+      outline-offset: 4px;
+      cursor: text;
+    }
+    .edit-outline-img {
+      outline: 2px dashed #06b6d4 !important;
+      outline-offset: 4px;
+      cursor: pointer;
+    }
+
+    .leaflet-popup-content-wrapper { background: #161c28; color: #f0f6fc; border: 1px solid #30363d; border-radius: 12px; }
+    .leaflet-popup-tip { background: #161c28; }
+    .leaflet-tooltip.zone-label {
+      background: rgba(15, 23, 42, 0.85) !important;
+      border: 1.5px solid #22d3ee !important;
+      border-radius: 9999px !important;
+      padding: 3px 10px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      color: #ffffff !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .custom-marker { background: transparent; border: none; box-shadow: none; }
+    .map-sidebar { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  </style>
+</head>
+<body class="min-h-screen bg-[#090c10] selection:bg-rose-500 selection:text-white flex flex-col">
+
+  <!-- Input oculto para carga directa de imágenes -->
+  <input type="file" id="cms-file-loader" accept="image/*" class="hidden">
+
+  <!-- ========================================== -->
+  <!-- MODAL DE AUTENTICACIÓN                     -->
+  <!-- ========================================== -->
+  <div id="auth-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-[#161c28] border border-slate-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="text-center">
+        <h3 class="font-extrabold text-white text-lg">Cuenta DuggApp Hub</h3>
+        <p class="text-xs text-slate-400 mt-1">Conéctate para sincronizar tus progresos y herramientas</p>
+      </div>
+
+      <div class="flex bg-slate-900/80 p-1 rounded-xl text-xs font-bold">
+        <button id="tab-login" class="flex-1 py-1.5 rounded-lg bg-rose-500 text-white transition" onclick="setAuthMode('login')">Ingresar</button>
+        <button id="tab-register" class="flex-1 py-1.5 rounded-lg text-slate-400 hover:text-white transition" onclick="setAuthMode('register')">Registrarse</button>
+      </div>
+
+      <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Usuario</label>
+          <input type="text" id="auth-user" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500">
+        </div>
+        <div id="auth-email-group" class="hidden">
+          <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Correo Electrónico</label>
+          <input type="email" id="auth-email" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Contraseña</label>
+          <input type="password" id="auth-pass" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500">
+        </div>
+        <button type="submit" id="auth-submit-btn" class="w-full py-2.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs transition shadow-lg shadow-rose-500/25">
+          Iniciar Sesión
+        </button>
+      </form>
+      <div id="auth-msg" class="text-center text-xs font-semibold min-h-[16px]"></div>
+      <button onclick="closeAuthModal()" class="w-full text-center text-xs text-slate-500 hover:text-white">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE EDICIÓN DEL MAPA N-TYPE          -->
+  <!-- ========================================== -->
+  <div id="map-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[2000] hidden flex items-center justify-center p-4">
+    <div class="bg-[#161c28] border border-slate-700 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
+      <div class="p-6 space-y-4">
+        <h3 id="map-modal-title" class="text-lg font-bold text-white">Elemento del Mapa</h3>
+        <input id="map-item-name" type="text" placeholder="Nombre de la locación o zona" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400">
+        <div id="map-icon-picker" class="grid grid-cols-7 gap-1.5"></div>
+        <div id="map-color-container" class="hidden">
+          <label class="text-[11px] font-bold text-slate-400 block mb-1 uppercase">Color de Zona</label>
+          <input id="map-item-color" type="color" value="#22d3ee" class="w-full h-10 bg-transparent border border-slate-700 rounded-xl cursor-pointer p-0.5">
+        </div>
+        <textarea id="map-item-desc" placeholder="Descripción (opcional)" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"></textarea>
+      </div>
+      <div class="bg-slate-900/60 border-t border-slate-800 p-4 flex gap-3">
+        <button onclick="closeMapModal()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition">Cancelar</button>
+        <button onclick="saveMapModalItem()" class="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-xs font-bold text-slate-950 transition">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- CONTENEDOR CENTRAL                         -->
+  <!-- ========================================== -->
+  <div id="app-container" class="w-full max-w-7xl mx-auto min-h-screen bg-[#0d1117] flex flex-col relative pb-20 md:pb-8 shadow-2xl border-x border-slate-800/60 flex-1">
+    
+    <!-- Barra Superior de Notificación de Modo Edición -->
+    <div id="editor-indicator-bar" class="hidden bg-amber-500 text-slate-950 px-6 py-2 text-xs font-black flex items-center justify-between sticky top-0 z-40 shadow-lg">
+      <span class="flex items-center gap-2">
+        <span>✏️ MODO EDITOR VISUAL ACTIVO (STAFF)</span>
+        <span class="font-normal opacity-90">— Haz clic en textos o imágenes para editar en caliente</span>
+      </span>
+      <button onclick="toggleVisualEditMode()" class="px-3 py-1 bg-slate-950 text-white rounded-lg text-[11px] font-bold hover:bg-slate-900 transition">
+        Finalizar Edición
+      </button>
+    </div>
+
+    <!-- Header Superior -->
+    <header class="px-6 py-4 flex items-center justify-between border-b border-slate-800 bg-[#0d1117]/95 backdrop-blur sticky top-0 z-30">
+      <div class="flex items-center gap-8">
+        <div class="flex items-center gap-2.5 cursor-pointer" onclick="closeTool()">
+          <div class="w-8 h-8 rounded-lg bg-rose-500 flex items-center justify-center font-black text-sm text-white shadow-lg shadow-rose-500/30">D</div>
+          <span class="font-bold text-lg tracking-wide text-white">DUGGAPP <span class="text-xs text-rose-400 font-semibold px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 ml-1">HUB</span></span>
+        </div>
+
+        <nav class="hidden md:flex items-center gap-1.5 text-xs font-semibold">
+          <button class="nav-desktop-btn px-3.5 py-1.5 rounded-lg text-rose-500 bg-rose-500/10" data-view="tools">Herramientas</button>
+          <button class="nav-desktop-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition" data-view="feed">Plaza / Feed</button>
+          <button class="nav-desktop-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition" data-view="profile">Mi Perfil</button>
+        </nav>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div id="header-user-badge" class="flex items-center gap-2.5 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full cursor-pointer hover:border-slate-700 transition" onclick="setNavigationTab('profile')">
+          <div id="header-avatar" class="w-6 h-6 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-xs font-bold overflow-hidden">?</div>
+          <span id="header-username" class="text-xs font-semibold text-slate-300">Conectar</span>
+        </div>
+
+        <!-- Botón para alternar el Modo Editor Visual Staff -->
+        <button id="btn-toggle-editor" onclick="toggleVisualEditMode()" class="hidden p-2 rounded-lg text-amber-400 hover:bg-amber-500/10 border border-amber-500/30 transition" title="Activar Modo Editor Visual">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        </button>
+
+        <button id="btn-logout" onclick="logout()" class="hidden p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition" title="Cerrar sesión">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+
+        <button id="btn-open-admin" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Gestionar espacios">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Selector de Títulos Activos -->
+    <nav id="games-tab-bar" class="flex gap-2.5 px-6 py-3 border-b border-slate-800 overflow-x-auto no-scrollbar bg-[#0b0e14]">
+      <!-- Inyectado por JS -->
+    </nav>
+
+    <!-- Contenido Principal -->
+    <main id="main-content" class="flex-1 p-6 space-y-6">
+      <!-- Inyectado por JS -->
+    </main>
+
+    <!-- Navegación Móvil Inferior -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-[#0d1117]/95 backdrop-blur border-t border-slate-800 py-2 px-6 flex justify-around items-center z-40">
+      <button class="nav-bottom-btn flex flex-col items-center gap-1 text-rose-500 font-semibold text-xs" data-view="tools">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+        <span>Herramientas</span>
+      </button>
+      <button class="nav-bottom-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 font-semibold text-xs" data-view="feed">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+        <span>Plaza / Feed</span>
+      </button>
+      <button class="nav-bottom-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 font-semibold text-xs" data-view="profile">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        <span>Mi Perfil</span>
+      </button>
+    </nav>
+
+    <!-- Modal de Gestión de Visibilidad -->
+    <div id="admin-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-[#161c28] border border-slate-700 w-full max-w-sm rounded-2xl p-5 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-700">
+          <h3 class="font-bold text-white text-base">Gestionar Espacios</h3>
+          <button id="btn-close-admin" class="text-slate-400 hover:text-white text-lg">&times;</button>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed">Alterna la visibilidad de cada título:</p>
+        <div id="admin-toggles-list" class="space-y-3"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ============================================================
+    // 1. INICIALIZACIÓN OFICIAL DE FIREBASE & FIRESTORE
+    // ============================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyCAHVLR__T1wdpzu4O71Hs9p_u8T8AeySs",
+      authDomain: "jopjoirdatabase.firebaseapp.com",
+      databaseURL: "https://jopjoirdatabase-default-rtdb.firebaseio.com",
+      projectId: "jopjoirdatabase",
+      storageBucket: "jopjoirdatabase.firebasestorage.app",
+      messagingSenderId: "1005048549344",
+      appId: "1:1005048549344:web:72b47f16244ed72a696585",
+      measurementId: "G-XEF9661C8G"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const fs = firebase.firestore();
+
+    let activeUID = localStorage.getItem("jopjoir_uid") || null;
+    let currentUsername = localStorage.getItem("jopjoir_username") || null;
+    let currentUserData = null;
+    let isVisualEditMode = false;
+
+    if (activeUID) {
+      db.ref('users/' + activeUID).on('value', (snap) => {
+        currentUserData = snap.val() || null;
+        updateUserHeader();
+        if (activeTab === "profile") renderMainContent();
+      });
+    }
+
+    // ============================================================
+    // 2. MODELO DE DATOS REACTIVO
+    // ============================================================
+    const PALETA_PASTEL = [
+      { id: "pastel_aurora", gradient: "linear-gradient(135deg, #fbcfe8 0%, #ddd6fe 50%, #bae6fd 100%)" },
+      { id: "pastel_lavanda", gradient: "linear-gradient(135deg, #e9d5ff 0%, #c4b5fd 100%)" },
+      { id: "pastel_menta", gradient: "linear-gradient(135deg, #ccfbf1 0%, #99f6e4 50%, #a7f3d0 100%)" },
+      { id: "pastel_dulce", gradient: "linear-gradient(135deg, #fecdd3 0%, #fed7aa 100%)" },
+      { id: "pastel_ocaso", gradient: "linear-gradient(135deg, #fef08a 0%, #fed7aa 50%, #fbcfe8 100%)" },
+      { id: "pastel_cielo", gradient: "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)" }
+    ];
+
+    const CATALOGO_BANNERS = [
+      { id: "banner_1", tipo: "pts", ptsRequeridos: 1000 },
+      { id: "banner_2", tipo: "pts", ptsRequeridos: 2000 },
+      { id: "banner_3", tipo: "pts", ptsRequeridos: 3000 },
+      { id: "banner_4", tipo: "dulucks", costoDulucks: 10 },
+      { id: "banner_5", tipo: "staff" }
+    ];
+
+    const LISTA_LOGROS_JOPJOIR = [
+      { id: "joircazador_aereo", titulo: "Joircazador Aéreo", desc: "Derrotar un enemigo estando en el aire", rareza: "comun", meta: 1 },
+      { id: "suerte_de_joir", titulo: "Suerte de Joir", desc: "Recolectar un Duluck durante una partida", rareza: "muy_raro", meta: 1 },
+      { id: "cazador_joirs_1", titulo: "Cazador de Joirs I", desc: "Derrotar 10 enemigos en una sola partida", rareza: "comun", meta: 10 },
+      { id: "cazador_joirs_2", titulo: "Cazador de Joirs II", desc: "Derrotar 15 enemigos en una sola partida", rareza: "raro", meta: 15 },
+      { id: "cazador_joirs_3", titulo: "Cazador de Joirs III", desc: "Derrotar 20 enemigos en una sola partida", rareza: "muy_raro", meta: 20 },
+      { id: "cazador_joirs_4", titulo: "Cazador de Joirs IV", desc: "Derrotar 25 enemigos en una sola partida", rareza: "inaudito", meta: 25 },
+      { id: "joirinvicto_1", titulo: "Campeón Joirinvicto I", desc: "Tener una racha de 3 partidas", rareza: "raro", meta: 3 },
+      { id: "joirinvicto_2", titulo: "Campeón Joirinvicto II", desc: "Tener una racha de 6 partidas", rareza: "muy_raro", meta: 6 },
+      { id: "joirinvicto_3", titulo: "Campeón Joirinvicto III", desc: "Tener una racha de 9 partidas", rareza: "muy_raro", meta: 9 },
+      { id: "joirinvicto_4", titulo: "Campeón Joirinvicto IV", desc: "Tener una racha de 12 partidas", rareza: "muy_raro", meta: 12 },
+      { id: "joirinvicto_5", titulo: "Campeón Joirinvicto V", desc: "Tener una racha de 15 partidas", rareza: "inaudito", meta: 15 },
+      { id: "joir_extremo_1", titulo: "Joir al extremo I", desc: "Ganar 10 partidas de Extremo", rareza: "comun", meta: 10 },
+      { id: "joir_extremo_2", titulo: "Joir al extremo II", desc: "Ganar 20 partidas de Extremo", rareza: "comun", meta: 20 },
+      { id: "joir_extremo_3", titulo: "Joir al extremo III", desc: "Ganar 50 partidas de Extremo", rareza: "raro", meta: 50 },
+      { id: "joir_extremo_4", titulo: "Joir al extremo IV", desc: "Ganar 100 partidas de Extremo", rareza: "muy_raro", meta: 100 },
+      { id: "joir_extremo_5", titulo: "Joir al extremo V", desc: "Ganar 200 partidas de Extremo", rareza: "inaudito", meta: 200 },
+      { id: "alcanzia_1", titulo: "Alcancía I", desc: "Ahorrar 500 Enjoirs", rareza: "comun", meta: 500 },
+      { id: "alcanzia_2", titulo: "Alcancía II", desc: "Ahorrar 1000 Enjoirs", rareza: "comun", meta: 1000 },
+      { id: "alcanzia_3", titulo: "Alcancía III", desc: "Ahorrar 2500 Enjoirs", rareza: "raro", meta: 2500 },
+      { id: "alcanzia_4", titulo: "Alcancía IV", desc: "Ahorrar 5000 Enjoirs", rareza: "muy_raro", meta: 5000 },
+      { id: "alcanzia_5", titulo: "Alcancía V", desc: "Ahorrar 10000 Enjoirs", rareza: "inaudito", meta: 10000 },
+      { id: "tienda_skins_1", titulo: "Cúbreme de joirskins I", desc: "Compra una skin", rareza: "comun", meta: 1 },
+      { id: "tienda_skins_2", titulo: "Cúbreme de joirskins II", desc: "Compra 5 skins", rareza: "raro", meta: 5 },
+      { id: "tienda_skins_3", titulo: "Cúbreme de joirskins III", desc: "Compra 10 skins", rareza: "muy_raro", meta: 10 },
+      { id: "tienda_compulsiva", titulo: "Compra Joircompulsiva", desc: "Compra toda la tienda", rareza: "inaudito", meta: 1 }
+    ];
+
+    let gamesData = [
+      {
+        id: "jopjoir",
+        name: "JopJoir",
+        color: "from-amber-500 to-rose-500",
+        isEnabled: true,
+        modules: [
+          { id: "ranking", name: "Ranking", icon: "🏆", desc: "Tabla de campeones en vivo" },
+          { id: "checkin", name: "Check-In", icon: "🎁", desc: "Recompensa diaria" },
+          { id: "achieve", name: "Logros", icon: "🎖️", desc: "Registro de combate" },
+          { id: "banners", name: "Banners", icon: "🖼️", desc: "Personalización" },
+          { id: "community", name: "Plaza Joir", icon: "💬", desc: "Foro y debate" },
+          { id: "play", name: "Jugar", icon: "🎮", desc: "Lanzador oficial" }
+        ]
+      },
+      {
+        id: "project-ntype",
+        name: "Project N-Type: Inversión",
+        color: "from-cyan-500 to-blue-600",
+        isEnabled: true,
+        modules: [
+          { id: "characters", name: "Personajes", icon: "👤", desc: "Vitrina, afinidad y catálogo" },
+          { id: "map", name: "Mapa Interactivo", icon: "🗺️", desc: "Zonas cartográficas" },
+          { id: "lore", name: "Base de Datos", icon: "📖", desc: "Archivos y Lore" }
+        ]
+      },
+      {
+        id: "wunyaku",
+        name: "Wunyaku",
+        color: "from-purple-500 to-indigo-600",
+        isEnabled: false,
+        modules: [
+          { id: "soon", name: "Próximamente", icon: "⏳", desc: "En preparación" }
+        ]
+      }
+    ];
+
+    // Personajes sincronizados desde Cloud Firestore
+    let charactersNType = [
+      { 
+        id: "lan", 
+        name: "Lan", 
+        role: "Vanguardia de Combate", 
+        desc: "Especialista en movilidad y rupturas frontales de línea en el espacio de inversión.", 
+        image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80",
+        isObtained: true,
+        level: 80,
+        maxLevel: 90
+      },
+      { 
+        id: "niobi", 
+        name: "Niobi", 
+        role: "Especialista Técnica / Hacker", 
+        desc: "Capaz de alterar parámetros de combate, hackear terminales y manipular debilidades enemigas.", 
+        image: "https://images.unsplash.com/photo-1563089145-599997674d42?w=600&auto=format&fit=crop&q=80",
+        isObtained: false,
+        level: 1,
+        maxLevel: 90
+      }
+    ];
+
+    // Listener reactivo a Cloud Firestore
+    fs.collection("characters").onSnapshot(snapshot => {
+      if (!snapshot.empty) {
+        charactersNType = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (activeSubTool === "characters") renderMainContent();
+      }
+    });
+
+    let activeGameId = "jopjoir";
+    let activeTab = "tools";
+    let activeSubTool = null;
+    let authMode = "login";
+    let profileTab = "overview";
+    let selectedCharId = "lan";
+    let charViewMode = "all";
+
+    // Variables del Mapa de N-Type
+    const mapIcons = ['📍','🏠','🏰','🌲','🏔️','💎','⚔️','🐉','🏴‍☠️','🔥','🛡️','🗝️','🌊','🌋'];
+    let leafletMap = null;
+    let mapMarkers = [];
+    let mapZones = [];
+    let permanentZoneLabels = true;
+    let editingMapType = null;
+    let editingMapIndex = -1;
+    let selectedMapIcon = '📍';
+    let currentMapTempData = null;
+
+    function cleanUsername(str) { return str.toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+    function esStaff() {
+      if (!currentUserData) return false;
+      const uname = (currentUserData.info?.username || currentUsername || "").toLowerCase();
+      const rol = currentUserData.info?.rol || "";
+      return uname === "catteru2" || rol === "admin" || rol === "mod";
+    }
+
+    function calcularPrestigioJopJoir(userData) {
+      let cantLogros = 0;
+      if (userData?.logros) {
+        Object.values(userData.logros).forEach(l => {
+          if ((typeof l === "object" && (l.unlocked || l.desbloqueado)) || (typeof l === "boolean" && l)) cantLogros++;
+        });
+      }
+      const racha = userData?.stats?.racha_maxima || userData?.stats?.racha || 0;
+      return (racha * 100) + (cantLogros * 250);
+    }
+
+    function calcularPrestigioGlobal(userData) {
+      const prestigioJopJoir = calcularPrestigioJopJoir(userData);
+      const afinidadTotal = Object.values(userData?.ntype_afinidad || {}).reduce((a, b) => a + (b.puntos || 0), 0);
+      return prestigioJopJoir + (afinidadTotal * 50);
+    }
+
+    function updateUserHeader() {
+      const headerUser = document.getElementById("header-username");
+      const headerAvatar = document.getElementById("header-avatar");
+      const btnLogout = document.getElementById("btn-logout");
+      const btnEditor = document.getElementById("btn-toggle-editor");
+
+      if (currentUserData && activeUID) {
+        const uname = currentUserData.info?.username || currentUsername;
+        headerUser.textContent = uname;
+        if (currentUserData.info?.avatar) {
+          headerAvatar.innerHTML = `<img src="${currentUserData.info.avatar}" class="w-full h-full object-cover">`;
+        } else {
+          headerAvatar.textContent = uname.charAt(0).toUpperCase();
+        }
+        if (btnLogout) btnLogout.classList.remove("hidden");
+        if (btnEditor) btnEditor.classList.toggle("hidden", !esStaff());
+      } else {
+        headerUser.textContent = "Conectar";
+        headerAvatar.textContent = "?";
+        if (btnLogout) btnLogout.classList.add("hidden");
+        if (btnEditor) btnEditor.classList.add("hidden");
+        if (isVisualEditMode) toggleVisualEditMode();
+      }
+    }
+
+    function getActiveGames() { return gamesData.filter(g => g.isEnabled); }
+    function getCurrentGame() {
+      const active = getActiveGames();
+      return active.find(g => g.id === activeGameId) || active[0] || null;
+    }
+
+    // ============================================================
+    // 3. RENDERIZADO DEL HUB
+    // ============================================================
+    function renderTabs() {
+      const tabsContainer = document.getElementById("games-tab-bar");
+      const activeGames = getActiveGames();
+
+      if (!activeGames.some(g => g.id === activeGameId) && activeGames.length > 0) {
+        activeGameId = activeGames[0].id;
+      }
+
+      tabsContainer.innerHTML = activeGames.map(game => {
+        const isSelected = game.id === activeGameId;
+        return `
+          <button onclick="selectGame('${game.id}')" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
+            isSelected 
+              ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20' 
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+          }">
+            <span ${isVisualEditMode ? `contenteditable="true" onblur="guardarNombreJuegoEnVivo('${game.id}', this.innerText)" class="edit-outline"` : ''}>${game.name}</span>
+          </button>
+        `;
+      }).join("");
+    }
+
+    function renderMainContent() {
+      const container = document.getElementById("main-content");
+      const game = getCurrentGame();
+
+      if (!game) {
+        container.innerHTML = `
+          <div class="py-20 text-center space-y-2">
+            <p class="text-3xl">🚫</p>
+            <h3 class="text-slate-200 font-bold">No hay títulos activos</h3>
+            <p class="text-xs text-slate-400">Abre el panel de administración para habilitar un título.</p>
+          </div>
+        `;
+        return;
+      }
+
+      if (activeSubTool === "ranking") { renderRealRanking(container); return; }
+      if (activeSubTool === "checkin") { renderCheckInView(container); return; }
+      if (activeSubTool === "characters") { renderCharactersSection(container); return; }
+      if (activeSubTool === "map") { renderNTypeInteractiveMap(container); return; }
+      if (activeSubTool === "achieve") { renderLogrosModule(container); return; }
+      if (activeSubTool === "banners") { renderBannersModule(container); return; }
+
+      if (activeTab === "feed") { renderForoFeed(container); return; }
+      if (activeTab === "profile") { renderUnifiedProfileView(container); return; }
+
+      container.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 space-y-6">
+            <div class="relative w-full h-48 md:h-64 rounded-2xl overflow-hidden bg-gradient-to-r ${game.color} p-7 flex flex-col justify-end shadow-xl">
+              <div class="absolute inset-0 bg-gradient-to-t from-[#090c10]/95 via-transparent to-transparent"></div>
+              <div class="relative z-10">
+                <h2 class="text-3xl md:text-4xl font-black text-white tracking-tight" ${isVisualEditMode ? `contenteditable="true" onblur="guardarNombreJuegoEnVivo('${game.id}', this.innerText)" class="edit-outline"` : ''}>${game.name}</h2>
+              </div>
+            </div>
+
+            <div class="space-y-3.5">
+              <div class="flex items-center justify-between">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Herramientas y Accesos</h3>
+                <span class="text-xs text-slate-500 font-mono">${game.modules.length} módulos</span>
+              </div>
+
+              <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 gap-3.5">
+                ${game.modules.map(mod => `
+                  <button onclick="openTool('${mod.id}')" class="flex flex-col items-center justify-center p-4 rounded-xl bg-[#161c28] border border-slate-800 hover:border-rose-500/50 hover:bg-[#1c2433] active:scale-95 transition text-center group shadow-sm">
+                    <span class="text-2xl md:text-3xl mb-1.5 group-hover:scale-110 transition">${mod.icon}</span>
+                    <span class="text-xs font-bold text-slate-200 truncate w-full">${mod.name}</span>
+                  </button>
+                `).join("")}
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="p-5 rounded-xl bg-[#161c28] border border-slate-800 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-rose-400 uppercase tracking-wider">Estado Técnico</span>
+                <span class="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">En línea</span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Base central conectada al Realtime Database oficial y Firestore. Módulos y cuentas sincronizadas en tiempo real.
+              </p>
+            </div>
+
+            <div class="p-5 rounded-xl bg-[#161c28] border border-slate-800 space-y-3">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Comunidad Oficial</h4>
+              <button onclick="setNavigationTab('feed')" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition">
+                Abrir Plaza Joir ↗
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ============================================================
+    // 4. PERSONAJES CON VITRINA HOYOLAB & EDICIÓN VISUAL IN-PLACE
+    // ============================================================
+    function renderCharactersSection(container) {
+      const char = charactersNType.find(c => c.id === selectedCharId) || charactersNType[0];
+      if (!char) {
+        container.innerHTML = `
+          <div class="text-center py-10 space-y-3">
+            <p class="text-slate-400 text-xs">No hay personajes cargados.</p>
+            ${isVisualEditMode ? `<button onclick="crearNuevoPersonajeVisual()" class="px-4 py-2 bg-cyan-500 text-slate-950 font-bold rounded-xl text-xs">+ Crear Primer Personaje</button>` : ''}
+          </div>
+        `;
+        return;
+      }
+
+      const afinidadData = currentUserData?.ntype_afinidad?.[char.id] || { puntos: 0, ultima_visita: "" };
+      const hoy = new Date().toISOString().slice(0, 10);
+      const visitadoHoy = afinidadData.ultima_visita === hoy;
+
+      const listaRender = charViewMode === "my" 
+        ? charactersNType.filter(c => c.isObtained) 
+        : charactersNType;
+
+      container.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <button onclick="closeTool()" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+              ← Volver al Hub
+            </button>
+            <div class="flex items-center gap-2">
+              ${isVisualEditMode ? `
+                <button onclick="crearNuevoPersonajeVisual()" class="px-3 py-1 bg-amber-500 text-slate-950 rounded-lg text-xs font-black hover:bg-amber-400 transition shadow">
+                  + Agregar Operativo
+                </button>
+                <button onclick="eliminarPersonajeActual('${char.id}')" class="px-3 py-1 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-bold hover:bg-rose-500/30 transition">
+                  Eliminar
+                </button>
+              ` : ''}
+              <div class="flex bg-slate-900 border border-slate-800 p-1 rounded-xl text-xs font-bold font-mono">
+                <button onclick="setCharViewMode('all')" class="px-3 py-1 rounded-lg ${charViewMode === 'all' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}">Catálogo Completo</button>
+                <button onclick="setCharViewMode('my')" class="px-3 py-1 rounded-lg ${charViewMode === 'my' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}">Mis Personajes</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            <!-- Lista lateral de Operativos -->
+            <div class="lg:col-span-4 bg-[#161c28] border border-slate-800 rounded-2xl p-4 space-y-3 max-h-[650px] overflow-y-auto no-scrollbar">
+              <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-bold">Plantilla de Operativos</span>
+              <div class="space-y-2">
+                ${listaRender.map(c => `
+                  <div onclick="selectCharacter('${c.id}')" class="flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition ${c.id === selectedCharId ? 'bg-cyan-500/10 border-cyan-500' : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-800/60'}">
+                    <div class="w-12 h-12 rounded-xl bg-slate-800 overflow-hidden flex-shrink-0 border border-slate-700">
+                      <img src="${c.image || 'assets/banner_1.png'}" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h4 class="text-xs font-bold text-white truncate flex items-center justify-between">
+                        ${c.name}
+                        ${c.isObtained ? '<span class="text-[9px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded">OBTENIDO</span>' : ''}
+                      </h4>
+                      <p class="text-[10px] text-slate-400 truncate mt-0.5">${c.role}</p>
+                    </div>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+
+            <!-- Vitrina Vertical & Controles de Afinidad -->
+            <div class="lg:col-span-8 bg-[#161c28] border border-slate-800 rounded-2xl overflow-hidden p-6 relative">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                
+                <!-- Arte Vertical con Carga Directa de Archivo -->
+                <div 
+                  class="h-[460px] rounded-xl bg-slate-950 border border-slate-800 overflow-hidden relative shadow-2xl flex items-center justify-center group ${isVisualEditMode ? 'edit-outline-img' : ''}"
+                  onclick="${isVisualEditMode ? `triggerUploadImage('${char.id}')` : ''}"
+                  title="${isVisualEditMode ? 'Haz clic para subir una nueva imagen' : ''}">
+                  
+                  <img src="${char.image || 'assets/banner_1.png'}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                  <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none"></div>
+
+                  ${isVisualEditMode ? `
+                    <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition p-4 text-center">
+                      <span class="text-3xl mb-2">📷</span>
+                      <span class="text-xs font-black text-cyan-300">Cambiar Ilustración</span>
+                      <span class="text-[10px] text-slate-300 mt-1">Sube un archivo .png, .jpg o .webp</span>
+                    </div>
+                  ` : ''}
+
+                  <div class="absolute bottom-4 left-4 right-4 pointer-events-auto">
+                    <span 
+                      class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 ${isVisualEditMode ? 'edit-outline' : ''}" 
+                      ${isVisualEditMode ? `contenteditable="true" onblur="guardarCampoPersonaje('${char.id}', 'role', this.innerText)"` : ''}>
+                      ${char.role}
+                    </span>
+                    <h3 
+                      class="text-2xl font-black text-white mt-1.5 ${isVisualEditMode ? 'edit-outline' : ''}" 
+                      ${isVisualEditMode ? `contenteditable="true" onblur="guardarCampoPersonaje('${char.id}', 'name', this.innerText)"` : ''}>
+                      ${char.name}
+                    </h3>
+                  </div>
+                </div>
+
+                <!-- Panel de Afinidad & Registro -->
+                <div class="space-y-5">
+                  <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold text-slate-300">Puntos de Afinidad</span>
+                      <span class="text-base font-black font-mono text-cyan-400">${afinidadData.puntos || 0} pts</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                      Visita diariamente al personaje para sumar puntos. Acumula suficientes para desbloquear insignias, widgets y decoraciones temáticas.
+                    </p>
+                    <button onclick="visitarPersonaje('${char.id}')" ${visitadoHoy ? 'disabled' : ''} class="w-full py-2.5 rounded-xl font-bold text-xs transition ${
+                      visitadoHoy 
+                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
+                        : 'bg-cyan-500 hover:bg-cyan-600 text-slate-950 shadow-lg shadow-cyan-500/20'
+                    }">
+                      ${visitadoHoy ? '¡Compañero Visitado Hoy!' : '🌟 Visitar y Sumar +1 Punto'}
+                    </button>
+                  </div>
+
+                  <!-- Estado en la Cuenta -->
+                  <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+                    <span class="text-[10px] font-mono uppercase tracking-wider text-slate-500 block font-bold">Estado en la Cuenta</span>
+                    <div class="flex justify-between items-center text-xs">
+                      <span class="text-slate-300 font-medium">Nivel alcanzado</span>
+                      <span class="font-mono text-cyan-400 font-bold">Lv. ${char.level || 1} / ${char.maxLevel || 90}</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                      <div class="h-full bg-cyan-500 rounded-full" style="width: ${((char.level || 1) / (char.maxLevel || 90)) * 100}%"></div>
+                    </div>
+                  </div>
+
+                  <!-- Biografía Editable en Caliente -->
+                  <div class="space-y-1.5">
+                    <span class="text-[10px] font-mono uppercase tracking-wider text-slate-500 block font-bold">Archivo Biográfico</span>
+                    <p 
+                      class="text-xs text-slate-300 leading-relaxed bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 ${isVisualEditMode ? 'edit-outline' : ''}" 
+                      ${isVisualEditMode ? `contenteditable="true" onblur="guardarCampoPersonaje('${char.id}', 'desc', this.innerText)"` : ''}>
+                      ${char.desc || 'Sin registro en los archivos centrales.'}
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    function selectCharacter(id) {
+      selectedCharId = id;
+      renderMainContent();
+    }
+
+    function setCharViewMode(mode) {
+      charViewMode = mode;
+      renderMainContent();
+    }
+
+    async function visitarPersonaje(charId) {
+      if (!activeUID) { openAuthModal(); return; }
+      const hoy = new Date().toISOString().slice(0, 10);
+      const afinidadActual = currentUserData?.ntype_afinidad?.[charId]?.puntos || 0;
+
+      await db.ref(`users/${activeUID}/ntype_afinidad/${charId}`).set({
+        puntos: afinidadActual + 1,
+        ultima_visita: hoy
+      });
+      alert(`¡Has visitado al operativo! Sumaste +1 punto de afinidad.`);
+    }
+
+    // ============================================================
+    // 5. MOTOR DE EDICIÓN VISUAL & PROCESAMIENTO CANVAS
+    // ============================================================
+    function toggleVisualEditMode() {
+      if (!esStaff()) return;
+      isVisualEditMode = !isVisualEditMode;
+      document.getElementById("editor-indicator-bar").classList.toggle("hidden", !isVisualEditMode);
+      renderTabs();
+      renderMainContent();
+    }
+
+    async function guardarCampoPersonaje(charId, campo, valor) {
+      if (!esStaff()) return;
+      await fs.collection("characters").doc(charId).set({
+        [campo]: valor.trim()
+      }, { merge: true });
+    }
+
+    async function guardarNombreJuegoEnVivo(gameId, nuevoNombre) {
+      if (!esStaff()) return;
+      const g = gamesData.find(x => x.id === gameId);
+      if (g) {
+        g.name = nuevoNombre.trim();
+        await fs.collection("hub_config").doc("games").set({
+          [gameId]: { name: g.name }
+        }, { merge: true });
+      }
+    }
+
+    async function crearNuevoPersonajeVisual() {
+      const nombre = prompt("Nombre del nuevo Operativo:");
+      if (!nombre) return;
+      const charId = cleanUsername(nombre);
+      const nuevoChar = {
+        name: nombre.trim(),
+        role: "Vanguardia Táctica",
+        desc: "Descripción táctica inicial del operativo...",
+        image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80",
+        isObtained: true,
+        level: 1,
+        maxLevel: 90
+      };
+
+      await fs.collection("characters").doc(charId).set(nuevoChar);
+      selectedCharId = charId;
+      renderMainContent();
+    }
+
+    async function eliminarPersonajeActual(charId) {
+      if (!confirm(`¿Eliminar permanentemente al operativo ${charId.toUpperCase()}?`)) return;
+      await fs.collection("characters").doc(charId).delete();
+      selectedCharId = charactersNType[0]?.id || "";
+      renderMainContent();
+    }
+
+    // Manejo de carga directa y optimización WebP/Canvas
+    let targetUploadCharId = null;
+    function triggerUploadImage(charId) {
+      targetUploadCharId = charId;
+      const loader = document.getElementById("cms-file-loader");
+      loader.value = "";
+      loader.click();
+    }
+
+    document.getElementById("cms-file-loader").addEventListener("change", function(e) {
+      const file = e.target.files[0];
+      if (!file || !targetUploadCharId) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = async function() {
+          // Redimensión y compresión en Canvas a WebP ligero (<100KB)
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          const MAX_WIDTH = 600;
+          const MAX_HEIGHT = 900;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+          } else {
+            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL("image/webp", 0.8);
+          await fs.collection("characters").doc(targetUploadCharId).set({
+            image: compressedBase64
+          }, { merge: true });
+
+          alert("Ilustración actualizada y sincronizada en tiempo real.");
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // ============================================================
+    // 6. MAPA INTERACTIVO N-TYPE
+    // ============================================================
+    function renderNTypeInteractiveMap(container) {
+      container.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <button onclick="closeTool()" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+              ← Volver al Hub
+            </button>
+            <span class="text-xs font-mono text-slate-500">MAPA INTERACTIVO - PROJECT N-TYPE</span>
+          </div>
+
+          <div class="relative w-full h-[75vh] rounded-2xl overflow-hidden border border-slate-800 bg-[#0a0a0a] flex">
+            
+            <div id="map-sidebar" class="map-sidebar absolute top-0 bottom-0 left-0 w-72 bg-slate-950/95 backdrop-blur-md border-r border-slate-800 z-[1000] flex flex-col translate-x-[-100%] md:translate-x-0 shadow-2xl">
+              <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+                <h4 class="text-cyan-400 font-bold text-sm flex items-center gap-1.5">📍 Locaciones</h4>
+                <button onclick="toggleMapSidebar()" class="md:hidden text-slate-400 hover:text-white">✕</button>
+              </div>
+
+              <div class="p-3.5 border-b border-slate-800">
+                <label class="flex items-center gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="map-permanent-labels" checked onchange="togglePermanentZoneLabels()" class="accent-cyan-500 w-4 h-4">
+                  <span class="text-xs text-slate-300 font-medium">Etiquetas permanentes</span>
+                </label>
+              </div>
+
+              <div class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                <div>
+                  <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Marcadores</span>
+                  <ul id="map-markers-list" class="space-y-1.5"></ul>
+                </div>
+                <div>
+                  <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Zonas Delimitadas</span>
+                  <ul id="map-zones-list" class="space-y-1.5"></ul>
+                </div>
+              </div>
+            </div>
+
+            <div id="leaflet-map-canvas" class="w-full h-full z-10"></div>
+
+            <div class="absolute bottom-5 right-5 z-[1000] flex flex-col gap-2.5">
+              <button onclick="startMapAddMarker()" class="bg-emerald-600 hover:bg-emerald-500 w-11 h-11 rounded-xl shadow-xl flex items-center justify-center text-xl transition" title="Añadir Marcador">📍</button>
+              <button onclick="startMapDrawZone()" class="bg-cyan-600 hover:bg-cyan-500 w-11 h-11 rounded-xl shadow-xl flex items-center justify-center text-xl transition" title="Delimitar Zona">🟥</button>
+              <button onclick="toggleMapSidebar()" class="md:hidden bg-slate-800 hover:bg-slate-700 w-11 h-11 rounded-xl shadow-xl flex items-center justify-center text-xl transition" title="Abrir Lista">☰</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      setTimeout(initNTypeMapEngine, 50);
+    }
+
+    function initNTypeMapEngine() {
+      if (leafletMap) {
+        leafletMap.remove();
+        leafletMap = null;
+      }
+
+      const canvas = document.getElementById('leaflet-map-canvas');
+      if (!canvas) return;
+
+      const imageUrl = "https://i.ibb.co/W4JcbTk0/mapa-en-progreso-2.jpg";
+      const imageWidth = 3013;
+      const imageHeight = 2953;
+
+      leafletMap = L.map('leaflet-map-canvas', {
+        crs: L.CRS.Simple,
+        minZoom: -3,
+        maxZoom: 3,
+        attributionControl: false
+      });
+
+      const bounds = [[0, 0], [imageHeight, imageWidth]];
+      L.imageOverlay(imageUrl, bounds).addTo(leafletMap);
+      leafletMap.fitBounds(bounds);
+      leafletMap.invalidateSize();
+
+      loadMapData();
+
+      leafletMap.on('draw:created', e => {
+        const layer = e.layer;
+        if (e.layerType === 'marker') {
+          const latlng = layer.getLatLng();
+          currentMapTempData = { lat: latlng.lat, lng: latlng.lng };
+          editingMapType = 'marker';
+          editingMapIndex = -1;
+          selectedMapIcon = '📍';
+          openMapModal('Nuevo Marcador');
+        } else if (e.layerType === 'polygon') {
+          const latlngs = layer.getLatLngs()[0];
+          currentMapTempData = { latlngs };
+          editingMapType = 'zone';
+          editingMapIndex = -1;
+          openMapModal('Nueva Zona');
+        }
+        layer.remove();
+      });
+    }
+
+    function loadMapData() {
+      const saved = localStorage.getItem('mapData_v3');
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+          mapMarkers = data.markers || [];
+          mapZones = data.zones || [];
+          mapMarkers.forEach(m => createLeafletMarker(m));
+          mapZones.forEach(z => createLeafletZone(z));
+        } catch (err) {
+          console.warn("Error parseando datos del mapa:", err);
+        }
+      }
+      renderMapLists();
+      updateMapZoneTooltips();
+      const chk = document.getElementById('map-permanent-labels');
+      if (chk) chk.checked = permanentZoneLabels;
+    }
+
+    function saveMapData() {
+      localStorage.setItem('mapData_v3', JSON.stringify({
+        markers: mapMarkers.map(m => ({ id: m.id, name: m.name, desc: m.desc, icon: m.icon, lat: m.lat, lng: m.lng })),
+        zones: mapZones.map(z => ({ id: z.id, name: z.name, color: z.color, latlngs: z.latlngs }))
+      }));
+    }
+
+    function createLeafletMarker(data) {
+      const iconHtml = `<div style="font-size:32px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6));">${data.icon || '📍'}</div>`;
+      const icon = L.divIcon({ className: 'custom-marker', html: iconHtml, iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -20] });
+      const marker = L.marker([data.lat, data.lng], { icon }).addTo(leafletMap)
+        .bindPopup(`<b>${data.name}</b><br><small>${data.desc || ''}</small>`);
+      data.leafletLayer = marker;
+    }
+
+    function createLeafletZone(data) {
+      const poly = L.polygon(data.latlngs, { color: data.color, fillColor: data.color, fillOpacity: 0.35, weight: 2 })
+        .addTo(leafletMap);
+      data.leafletLayer = poly;
+      updateMapZoneTooltips();
+    }
+
+    function updateMapZoneTooltips() {
+      mapZones.forEach(z => {
+        if (z.leafletLayer) {
+          z.leafletLayer.unbindTooltip();
+          z.leafletLayer.bindTooltip(z.name, {
+            permanent: permanentZoneLabels,
+            direction: 'center',
+            className: 'zone-label',
+            offset: [0, 0]
+          });
+        }
+      });
+    }
+
+    function togglePermanentZoneLabels() {
+      permanentZoneLabels = document.getElementById('map-permanent-labels').checked;
+      updateMapZoneTooltips();
+    }
+
+    function toggleMapSidebar() {
+      document.getElementById('map-sidebar').classList.toggle('translate-x-[-100%]');
+    }
+
+    function startMapAddMarker() {
+      if (leafletMap) new L.Draw.Marker(leafletMap).enable();
+    }
+
+    function startMapDrawZone() {
+      if (leafletMap) new L.Draw.Polygon(leafletMap, { shapeOptions: { color: '#22d3ee', fillOpacity: 0.35 } }).enable();
+    }
+
+    function openMapModal(title) {
+      document.getElementById('map-modal-title').textContent = title;
+      document.getElementById('map-modal').classList.remove('hidden');
+
+      const isMarker = (editingMapType === 'marker');
+      document.getElementById('map-icon-picker').classList.toggle('hidden', !isMarker);
+      document.getElementById('map-color-container').classList.toggle('hidden', isMarker);
+
+      if (isMarker) renderMapIconPicker();
+
+      if (editingMapIndex >= 0) {
+        const item = isMarker ? mapMarkers[editingMapIndex] : mapZones[editingMapIndex];
+        document.getElementById('map-item-name').value = item.name || '';
+        document.getElementById('map-item-desc').value = item.desc || '';
+        if (!isMarker) document.getElementById('map-item-color').value = item.color || '#22d3ee';
+        if (isMarker) selectedMapIcon = item.icon || '📍';
+      } else {
+        document.getElementById('map-item-name').value = '';
+        document.getElementById('map-item-desc').value = '';
+        if (!isMarker) document.getElementById('map-item-color').value = '#22d3ee';
+      }
+    }
+
+    function renderMapIconPicker() {
+      const picker = document.getElementById('map-icon-picker');
+      picker.innerHTML = mapIcons.map(icon => `
+        <button type="button" onclick="selectMapIcon('${icon}')" class="w-10 h-10 flex items-center justify-center text-xl rounded-xl transition ${selectedMapIcon === icon ? 'bg-cyan-500 scale-110 shadow-lg' : 'bg-slate-800 hover:bg-slate-700'}">
+          ${icon}
+        </button>
+      `).join("");
+    }
+
+    function selectMapIcon(icon) {
+      selectedMapIcon = icon;
+      renderMapIconPicker();
+    }
+
+    function closeMapModal() {
+      document.getElementById('map-modal').classList.add('hidden');
+      editingMapIndex = -1;
+      editingMapType = null;
+    }
+
+    function saveMapModalItem() {
+      const name = document.getElementById('map-item-name').value.trim();
+      if (!name) { alert("Ingresa un nombre."); return; }
+
+      const desc = document.getElementById('map-item-desc').value.trim();
+      const color = document.getElementById('map-item-color').value || '#22d3ee';
+
+      if (editingMapIndex >= 0) {
+        if (editingMapType === 'marker') {
+          const item = mapMarkers[editingMapIndex];
+          item.name = name; item.desc = desc; item.icon = selectedMapIcon;
+          item.leafletLayer.remove();
+          createLeafletMarker(item);
+        } else {
+          const item = mapZones[editingMapIndex];
+          item.name = name; item.color = color;
+          item.leafletLayer.remove();
+          createLeafletZone(item);
+        }
+      } else {
+        const newItem = { id: Date.now(), name, desc };
+        if (editingMapType === 'marker') {
+          newItem.icon = selectedMapIcon;
+          newItem.lat = currentMapTempData.lat;
+          newItem.lng = currentMapTempData.lng;
+          mapMarkers.push(newItem);
+          createLeafletMarker(newItem);
+        } else {
+          newItem.color = color;
+          newItem.latlngs = currentMapTempData.latlngs;
+          mapZones.push(newItem);
+          createLeafletZone(newItem);
+        }
+      }
+
+      saveMapData();
+      renderMapLists();
+      closeMapModal();
+    }
+
+    function renderMapLists() {
+      const ml = document.getElementById('map-markers-list');
+      if (!ml) return;
+      ml.innerHTML = mapMarkers.map((m, i) => `
+        <li class="flex items-center justify-between bg-slate-900/80 hover:bg-slate-800 p-2.5 rounded-xl text-xs cursor-pointer border border-slate-800/60" onclick="focusMapMarker(${i})">
+          <div class="flex items-center gap-2 truncate">
+            <span class="text-base">${m.icon || '📍'}</span>
+            <span class="font-bold text-slate-200 truncate">${m.name}</span>
+          </div>
+          <div class="flex gap-1.5 ml-2" onclick="event.stopPropagation()">
+            <button onclick="editMapItem('marker', ${i})" class="text-amber-400 hover:text-amber-300">✏️</button>
+            <button onclick="deleteMapMarker(${i})" class="text-rose-400 hover:text-rose-300">🗑</button>
+          </div>
+        </li>
+      `).join("") || `<li class="text-[11px] text-slate-500">Sin marcadores registrados.</li>`;
+
+      const zl = document.getElementById('map-zones-list');
+      if (!zl) return;
+      zl.innerHTML = mapZones.map((z, i) => `
+        <li class="flex items-center justify-between bg-slate-900/80 hover:bg-slate-800 p-2.5 rounded-xl text-xs cursor-pointer border border-slate-800/60" onclick="focusMapZone(${i})">
+          <div class="flex items-center gap-2 truncate">
+            <div class="w-3.5 h-3.5 rounded-full flex-shrink-0" style="background:${z.color}"></div>
+            <span class="font-bold text-slate-200 truncate">${z.name}</span>
+          </div>
+          <div class="flex gap-1.5 ml-2" onclick="event.stopPropagation()">
+            <button onclick="editMapItem('zone', ${i})" class="text-amber-400 hover:text-amber-300">✏️</button>
+            <button onclick="deleteMapZone(${i})" class="text-rose-400 hover:text-rose-300">🗑</button>
+          </div>
+        </li>
+      `).join("") || `<li class="text-[11px] text-slate-500">Sin zonas delimitadas.</li>`;
+    }
+
+    function focusMapMarker(i) {
+      const m = mapMarkers[i];
+      if (leafletMap && m.leafletLayer) {
+        leafletMap.flyTo([m.lat, m.lng], 1.5);
+        m.leafletLayer.openPopup();
+      }
+    }
+
+    function focusMapZone(i) {
+      const z = mapZones[i];
+      if (leafletMap && z.leafletLayer) {
+        leafletMap.fitBounds(z.leafletLayer.getBounds(), { padding: [40, 40] });
+      }
+    }
+
+    function editMapItem(type, i) {
+      editingMapType = type;
+      editingMapIndex = i;
+      openMapModal(type === 'marker' ? 'Editar Marcador' : 'Editar Zona');
+    }
+
+    function deleteMapMarker(i) {
+      if (confirm("¿Eliminar este marcador?")) {
+        mapMarkers[i].leafletLayer.remove();
+        mapMarkers.splice(i, 1);
+        saveMapData();
+        renderMapLists();
+      }
+    }
+
+    function deleteMapZone(i) {
+      if (confirm("¿Eliminar esta zona?")) {
+        mapZones[i].leafletLayer.remove();
+        mapZones.splice(i, 1);
+        saveMapData();
+        renderMapLists();
+      }
+    }
+
+    // ============================================================
+    // 7. TABERNA DE CAMPEONES & CHECK-IN
+    // ============================================================
+    async function renderRealRanking(container) {
+      container.innerHTML = `
+        <div class="max-w-3xl mx-auto space-y-4">
+          <div class="flex items-center justify-between">
+            <button onclick="closeTool()" class="text-xs font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1">
+              ← Volver al Hub
+            </button>
+            <span class="text-xs font-mono text-slate-500">TABERNA DE CAMPEONES</span>
+          </div>
+          <div id="ranking-container-list" class="bg-[#161c28] border border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-800/60 p-6 text-center text-xs text-slate-400">
+            Cargando clasificación de prestigio en tiempo real...
+          </div>
+        </div>
+      `;
+
+      try {
+        const snap = await db.ref('users').once('value');
+        const usersObj = snap.val() || {};
+        let lista = [];
+
+        Object.keys(usersObj).forEach(uid => {
+          const u = usersObj[uid];
+          if (u.baneado) return;
+
+          const prestigio = calcularPrestigioJopJoir(u);
+          const racha = u.stats?.racha_maxima || u.stats?.racha || 0;
+          let cantLogros = 0;
+          if (u.logros) {
+            Object.values(u.logros).forEach(logro => {
+              if ((typeof logro === "object" && (logro.unlocked || logro.desbloqueado)) || (typeof logro === "boolean" && logro)) cantLogros++;
+            });
+          }
+
+          lista.push({
+            uid: uid,
+            username: u.info?.username || "Jugador",
+            avatar: u.info?.avatar || "",
+            rol: u.info?.rol || "",
+            nivel: u.stats?.nivel || 1,
+            racha: racha,
+            logros: cantLogros,
+            prestigio: prestigio
+          });
+        });
+
+        lista.sort((a, b) => b.prestigio - a.prestigio);
+
+        const listEl = document.getElementById("ranking-container-list");
+        listEl.className = "bg-[#161c28] border border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-800/60";
+        listEl.innerHTML = lista.slice(0, 50).map((user, index) => {
+          let medalla = `#${index + 1}`;
+          let medallaColor = "text-slate-400";
+          if (index === 0) { medalla = "🥇 1°"; medallaColor = "text-amber-400 font-extrabold"; }
+          if (index === 1) { medalla = "🥈 2°"; medallaColor = "text-slate-300 font-bold"; }
+          if (index === 2) { medalla = "🥉 3°"; medallaColor = "text-amber-600 font-bold"; }
+
+          return `
+            <div class="p-3.5 flex items-center gap-3.5">
+              <span class="w-9 text-center font-mono text-sm ${medallaColor}">${medalla}</span>
+              <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-xs overflow-hidden flex-shrink-0">
+                ${user.avatar ? `<img src="${user.avatar}" class="w-full h-full object-cover">` : user.username.charAt(0).toUpperCase()}
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                  ${user.username}
+                  ${user.rol === 'admin' ? '<span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded">ADMIN</span>' : ''}
+                </p>
+                <p class="text-[10px] text-slate-400 font-mono">Lv. ${user.nivel} • ${user.racha}🔥 • ${user.logros}🏅</p>
+              </div>
+              <div class="text-right">
+                <span class="text-sm font-bold text-rose-400 font-mono">${user.prestigio.toLocaleString()}</span>
+                <p class="text-[9px] text-slate-500 uppercase font-mono">PTS</p>
+              </div>
+            </div>
+          `;
+        }).join("");
+      } catch (err) {
+        document.getElementById("ranking-container-list").innerHTML = "Error al conectar con la base de datos.";
+      }
+    }
+
+    function renderCheckInView(container) {
+      if (!activeUID || !currentUserData) {
+        openAuthModal();
+        closeTool();
+        return;
+      }
+
+      const hoy = new Date().toISOString().slice(0, 10);
+      const yaReclamado = currentUserData.ultimo_checkin === hoy;
+
+      container.innerHTML = `
+        <div class="max-w-md mx-auto space-y-4">
+          <div class="flex items-center justify-between">
+            <button onclick="closeTool()" class="text-xs font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1">
+              ← Volver al Hub
+            </button>
+            <span class="text-xs font-mono text-slate-500">RECOMPENSA DIARIA</span>
+          </div>
+
+          <div class="p-6 rounded-xl bg-[#161c28] border border-slate-800 text-center space-y-4">
+            <div class="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl mx-auto">🎁</div>
+            <div>
+              <h3 class="font-bold text-white text-base">Check-in de JopJoir</h3>
+              <p class="text-xs text-slate-400 mt-1">+50 Enjoirs para tu cuenta de juego.</p>
+            </div>
+            <div id="checkin-status-msg" class="text-xs font-bold"></div>
+            <button id="btn-claim-checkin" onclick="reclamarCheckinReal()" ${yaReclamado ? 'disabled' : ''} class="w-full py-3 rounded-lg font-bold text-xs transition ${
+              yaReclamado 
+                ? 'bg-slate-700 text-slate-400 cursor-not-allowed' 
+                : 'bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/25'
+            }">
+              ${yaReclamado ? 'Recompensa de hoy reclamada' : 'Reclamar +50 Enjoirs'}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function reclamarCheckinReal() {
+      if (!activeUID || !currentUserData) return;
+      const hoy = new Date().toISOString().slice(0, 10);
+      const msg = document.getElementById("checkin-status-msg");
+      const btn = document.getElementById("btn-claim-checkin");
+
+      btn.disabled = true;
+      try {
+        await db.ref('users/' + activeUID).update({
+          "ultimo_checkin": hoy,
+          "inventario/enjoirs": (currentUserData.inventario?.enjoirs ?? 0) + 50
+        });
+        msg.className = "text-xs font-bold text-emerald-400";
+        msg.textContent = "¡+50 Enjoirs agregados a tu cuenta!";
+        btn.textContent = "Recompensa de hoy reclamada";
+        btn.className = "w-full py-3 rounded-lg font-bold text-xs bg-slate-700 text-slate-400 cursor-not-allowed";
+      } catch (err) {
+        msg.className = "text-xs font-bold text-rose-400";
+        msg.textContent = "Error al reclamar.";
+        btn.disabled = false;
+      }
+    }
+
+    // ============================================================
+    // 8. PLAZA JOIR / FEED
+    // ============================================================
+    function renderForoFeed(container) {
+      container.innerHTML = `
+        <div class="max-w-3xl mx-auto space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Plaza de la Comunidad</h3>
+            <button onclick="crearPublicacionRapida()" class="px-3.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-xs font-bold transition shadow-md shadow-rose-500/20">
+              + Publicar
+            </button>
+          </div>
+          <div id="forum-posts-list" class="space-y-3.5">
+            <p class="text-xs text-slate-400 text-center py-10">Cargando publicaciones del foro...</p>
+          </div>
+        </div>
+      `;
+
+      db.ref('foro_posts').on('value', (snap) => {
+        const posts = snap.val() || {};
+        const postsArray = Object.keys(posts).map(key => ({ id: key, ...posts[key] })).reverse();
+        const listEl = document.getElementById("forum-posts-list");
+        if (!listEl) return;
+
+        if (postsArray.length === 0) {
+          listEl.innerHTML = `<div class="p-8 text-center text-xs text-slate-400 bg-[#161c28] border border-slate-800 rounded-xl">No hay publicaciones activas en la plaza.</div>`;
+          return;
+        }
+
+        listEl.innerHTML = postsArray.map(post => {
+          const likesCount = post.likes ? Object.keys(post.likes).length : 0;
+          return `
+            <div class="p-5 rounded-xl bg-[#161c28] border border-slate-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                    ${post.autor_avatar ? `<img src="${post.autor_avatar}" class="w-full h-full object-cover">` : post.autor_nombre.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <span class="text-xs font-bold text-white block">${post.autor_nombre}</span>
+                    <span class="text-[10px] text-slate-500">${post.fecha || ''}</span>
+                  </div>
+                </div>
+                <span class="text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded font-semibold">${post.categoria || 'General'}</span>
+              </div>
+              <h4 class="text-sm font-bold text-white">${post.titulo}</h4>
+              <p class="text-xs text-slate-300 leading-relaxed">${post.cuerpo}</p>
+              ${post.imagen ? `<img src="${post.imagen}" class="w-full max-h-72 object-cover rounded-lg border border-slate-700/60">` : ''}
+              <div class="flex items-center gap-2 pt-2 border-t border-slate-800/60">
+                <button onclick="toggleLikePost('${post.id}')" class="text-xs font-bold text-slate-400 hover:text-rose-400 flex items-center gap-1.5 transition">
+                  ❤️ <span>${likesCount}</span>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join("");
+      });
+    }
+
+    async function toggleLikePost(postId) {
+      if (!activeUID) { openAuthModal(); return; }
+      const snap = await db.ref(`foro_posts/${postId}/likes/${activeUID}`).once('value');
+      if (snap.exists()) await db.ref(`foro_posts/${postId}/likes/${activeUID}`).remove();
+      else await db.ref(`foro_posts/${postId}/likes/${activeUID}`).set(true);
+    }
+
+    async function crearPublicacionRapida() {
+      if (!activeUID || !currentUserData) { openAuthModal(); return; }
+      const titulo = prompt("Título de la publicación:");
+      if (!titulo) return;
+      const cuerpo = prompt("Contenido de la publicación:");
+      if (!cuerpo) return;
+
+      const myName = currentUserData.info?.username || currentUsername;
+      await db.ref('foro_posts').push({
+        autor_uid: activeUID,
+        autor_nombre: myName,
+        autor_avatar: currentUserData.info?.avatar || "",
+        categoria: "General",
+        titulo: titulo.trim(),
+        cuerpo: cuerpo.trim(),
+        fecha: new Date().toLocaleDateString()
+      });
+    }
+
+    async function cambiarFotoPerfilPrompt() {
+      if (!activeUID) return;
+      const url = prompt("Ingresa la URL pública de tu imagen (o base64):");
+      if (url) {
+        await db.ref(`users/${activeUID}/info/avatar`).set(url);
+        alert("Foto de perfil actualizada.");
+      }
+    }
+
+    // ============================================================
+    // 9. PERSONALIZACIÓN DE PERFIL & BANNERS
+    // ============================================================
+    function renderUnifiedProfileView(container) {
+      if (!activeUID || !currentUserData) {
+        container.innerHTML = `
+          <div class="max-w-md mx-auto p-6 rounded-xl bg-[#161c28] border border-slate-800 text-center space-y-4">
+            <h3 class="font-bold text-white text-base">Inicia sesión</h3>
+            <p class="text-xs text-slate-400">Accede con tu usuario para gestionar tu perfil global y herramientas.</p>
+            <button onclick="openAuthModal()" class="w-full py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-lg transition shadow-lg shadow-rose-500/25">
+              Iniciar Sesión
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      const uname = currentUserData.info?.username || currentUsername;
+      const prestigioGlobal = calcularPrestigioGlobal(currentUserData);
+      const prestigioJopJoir = calcularPrestigioJopJoir(currentUserData);
+      const inv = currentUserData.inventario || {};
+
+      const bannerEquipado = currentUserData.info?.banner_equipado || "";
+      const pastelEquipado = currentUserData.info?.pastel_equipado || "pastel_aurora";
+      const pastelObj = PALETA_PASTEL.find(p => p.id === pastelEquipado) || PALETA_PASTEL[0];
+      const bgHeroStyle = bannerEquipado 
+        ? `background: url('assets/${bannerEquipado}.png') center/cover no-repeat;` 
+        : `background: ${pastelObj.gradient};`;
+
+      container.innerHTML = `
+        <div class="max-w-4xl mx-auto space-y-6">
+          
+          <div class="relative rounded-2xl overflow-hidden p-6 text-slate-900 border border-slate-700/60 shadow-xl" style="${bgHeroStyle}">
+            <div class="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div class="flex items-center gap-4">
+                
+                <div class="relative group cursor-pointer" onclick="cambiarFotoPerfilPrompt()" title="Cambiar foto de perfil">
+                  <div class="w-20 h-20 rounded-full bg-white text-rose-500 flex items-center justify-center font-extrabold text-2xl border-4 border-white shadow-lg overflow-hidden flex-shrink-0">
+                    ${currentUserData.info?.avatar ? `<img src="${currentUserData.info.avatar}" class="w-full h-full object-cover">` : uname.charAt(0).toUpperCase()}
+                  </div>
+                  <div class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-white text-xs font-bold">
+                    📷
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h2 class="text-2xl font-black text-slate-900">${uname}</h2>
+                    ${currentUserData.info?.rol === 'admin' ? '<span class="text-[10px] bg-amber-500 text-white font-extrabold px-2 py-0.5 rounded-full shadow">ADMIN</span>' : ''}
+                    ${currentUserData.info?.rol === 'mod' ? '<span class="text-[10px] bg-cyan-500 text-white font-extrabold px-2 py-0.5 rounded-full shadow">MOD</span>' : ''}
+                  </div>
+                  <span class="text-xs font-mono font-bold bg-white/70 backdrop-blur px-2.5 py-0.5 rounded-md mt-1 inline-block">UID: ${activeUID}</span>
+                </div>
+              </div>
+
+              <div class="bg-slate-950/85 backdrop-blur-md border border-slate-800 p-4 rounded-xl text-right text-white space-y-1 shadow-2xl">
+                <span class="text-[10px] uppercase font-mono tracking-wider text-rose-400 block font-bold">Prestigio Unificado</span>
+                <span class="text-2xl font-black font-mono text-white">${prestigioGlobal.toLocaleString()}</span>
+                <span class="text-[10px] text-slate-400 block font-mono">JopJoir: ${prestigioJopJoir.toLocaleString()} pts</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3 text-center font-mono">
+            <div class="bg-[#161c28] border border-slate-800 p-3 rounded-xl">
+              <span class="text-xs text-slate-400 block">🌸 Enjoirs</span>
+              <strong class="text-sm md:text-base text-rose-400">${(inv.enjoirs ?? 0).toLocaleString()}</strong>
+            </div>
+            <div class="bg-[#161c28] border border-slate-800 p-3 rounded-xl">
+              <span class="text-xs text-slate-400 block">🍀 Dulucks</span>
+              <strong class="text-sm md:text-base text-emerald-400">${(inv.dulucks ?? 0).toLocaleString()}</strong>
+            </div>
+            <div class="bg-[#161c28] border border-slate-800 p-3 rounded-xl">
+              <span class="text-xs text-slate-400 block">🎟️ Tickets</span>
+              <strong class="text-sm md:text-base text-amber-400">${(inv.tickets ?? 0).toLocaleString()}</strong>
+            </div>
+          </div>
+
+          <div class="flex gap-2 border-b border-slate-800 pb-2 text-xs font-bold overflow-x-auto no-scrollbar">
+            <button onclick="setProfileTab('overview')" class="px-3.5 py-1.5 rounded-lg whitespace-nowrap ${profileTab === 'overview' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'}">Resumen</button>
+            <button onclick="setProfileTab('jopjoir-stats')" class="px-3.5 py-1.5 rounded-lg whitespace-nowrap ${profileTab === 'jopjoir-stats' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'}">Stats JopJoir</button>
+            <button onclick="setProfileTab('banners')" class="px-3.5 py-1.5 rounded-lg whitespace-nowrap ${profileTab === 'banners' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'}">Personalización</button>
+            <button onclick="setProfileTab('logros')" class="px-3.5 py-1.5 rounded-lg whitespace-nowrap ${profileTab === 'logros' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'}">Logros (35)</button>
+          </div>
+
+          <div id="profile-tab-content">
+            ${renderProfileSubTabContent()}
+          </div>
+
+        </div>
+      `;
+    }
+
+    function setProfileTab(tab) { profileTab = tab; renderMainContent(); }
+
+    function renderProfileSubTabContent() {
+      const st = currentUserData.stats || {};
+      const victorias = st.total_victorias || 0;
+      const partidas = st.total_partidas || 0;
+      const winrate = partidas > 0 ? Math.round((victorias / partidas) * 100) : 0;
+
+      if (profileTab === "overview") {
+        const prestigioJopJoir = calcularPrestigioJopJoir(currentUserData);
+        const cantLogros = currentUserData?.logros ? Object.values(currentUserData.logros).filter(l => (typeof l === "object" ? (l.unlocked || l.desbloqueado) : l)).length : 0;
+
+        return `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-5 rounded-xl bg-[#161c28] border border-slate-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-rose-400">Distribución de Prestigio</h4>
+                <span class="text-[10px] font-mono text-slate-500">Por Título</span>
+              </div>
+              <div class="space-y-2.5">
+                <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-bold text-white block">JopJoir</span>
+                    <span class="text-[10px] text-slate-400 font-mono">${currentUserData?.stats?.racha_maxima || 0}🔥 racha • ${cantLogros}🏅 logros</span>
+                  </div>
+                  <span class="text-xs font-bold font-mono text-rose-400">${prestigioJopJoir.toLocaleString()} pts</span>
+                </div>
+
+                <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 flex items-center justify-between opacity-70">
+                  <div>
+                    <span class="text-xs font-bold text-white block">Project N-Type: Inversión</span>
+                    <span class="text-[10px] text-slate-400 font-mono">Fase de exploración</span>
+                  </div>
+                  <span class="text-xs font-bold font-mono text-cyan-400">0 pts</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-5 rounded-xl bg-[#161c28] border border-slate-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Hitos Recientes</h4>
+                <button onclick="setProfileTab('logros')" class="text-[10px] font-bold text-rose-400 hover:underline">Ver todos ↗</button>
+              </div>
+              <div class="p-3.5 bg-slate-900/60 border border-slate-800/80 rounded-lg space-y-2">
+                <div class="flex justify-between items-center text-xs">
+                  <span class="text-slate-300 font-medium">Logros JopJoir</span>
+                  <span class="font-mono text-rose-400 font-bold">${cantLogros} / 25</span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-rose-500 rounded-full" style="width: ${(cantLogros / 25) * 100}%"></div>
+                </div>
+                <p class="text-[10px] text-slate-500">Suma 250 puntos de prestigio directo por cada logro completado.</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (profileTab === "jopjoir-stats") {
+        return `
+          <div class="p-5 rounded-xl bg-[#161c28] border border-slate-800 space-y-4">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-rose-400">Estadísticas de Combate - JopJoir</h4>
+              <span class="text-xs font-mono text-slate-500">Lv. ${st.nivel || 1}</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono">
+              <div class="bg-slate-900/60 p-3 rounded-lg"><span class="text-[10px] text-slate-500 block">Partidas</span><strong class="text-base text-slate-200">${partidas.toLocaleString()}</strong></div>
+              <div class="bg-slate-900/60 p-3 rounded-lg"><span class="text-[10px] text-slate-500 block">Victorias</span><strong class="text-base text-emerald-400">${victorias.toLocaleString()}</strong></div>
+              <div class="bg-slate-900/60 p-3 rounded-lg"><span class="text-[10px] text-slate-500 block">% Victoria</span><strong class="text-base text-slate-200">${winrate}%</strong></div>
+              <div class="bg-slate-900/60 p-3 rounded-lg"><span class="text-[10px] text-slate-500 block">Racha Máx</span><strong class="text-base text-amber-400">${(st.racha_maxima || st.racha || 0).toLocaleString()}</strong></div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (profileTab === "banners") return renderBannersInterface();
+      if (profileTab === "logros") return renderLogrosInterface();
+    }
+
+    function renderBannersInterface() {
+      const pastelEquipado = currentUserData?.info?.pastel_equipado || "pastel_aurora";
+      const bannerEquipado = currentUserData?.info?.banner_equipado || "";
+      const misPuntos = calcularPrestigioJopJoir(currentUserData);
+      const misDulucks = currentUserData?.inventario?.dulucks || 0;
+      const misBannersComprados = currentUserData?.banners_comprados || {};
+
+      return `
+        <div class="space-y-5">
+          <div class="p-5 rounded-xl bg-[#161c28] border border-slate-800 space-y-3">
+            <div>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Fondos Degradados Pastel</h4>
+              <p class="text-[11px] text-slate-500">Selecciona un fondo limpio predeterminado</p>
+            </div>
+            <div class="flex gap-3 flex-wrap">
+              ${PALETA_PASTEL.map(p => `
+                <div onclick="equiparColorPastel('${p.id}')" class="w-12 h-12 rounded-xl cursor-pointer border-2 transition transform hover:scale-105 ${pastelEquipado === p.id && !bannerEquipado ? 'border-rose-500 scale-105' : 'border-transparent'}" style="background:${p.gradient};"></div>
+              `).join("")}
+            </div>
+          </div>
+
+          <div class="p-5 rounded-xl bg-[#161c28] border border-slate-800 space-y-3">
+            <div>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Banners Ilustrados</h4>
+              <p class="text-[11px] text-slate-500">Desbloquea fondos según tu progreso en la tabla de honor</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              ${CATALOGO_BANNERS.map((b, idx) => {
+                let desbloqueado = false;
+                if (b.tipo === "pts") desbloqueado = misPuntos >= b.ptsRequeridos;
+                else if (b.tipo === "dulucks" || b.tipo === "staff") desbloqueado = !!misBannersComprados[b.id];
+
+                const equipado = (bannerEquipado === b.id);
+                const nombreLimpio = `BANNER 0${idx + 1}`;
+
+                return `
+                  <div class="p-3 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
+                    <div class="h-20 rounded-lg bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-400 border border-slate-700/60" style="background-image: url('assets/${b.id}.png'); background-size:cover; background-position:center;">
+                      ${!desbloqueado ? '🔒' : ''}
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-mono font-bold text-slate-300">${nombreLimpio}</span>${equipado 
+                        ? `<span class="text-[10px] font-bold text-emerald-400">Equipado ✓</span>`
+                        : desbloqueado 
+                          ? `<button onclick="equiparBanner('${b.id}')" class="px-2.5 py-1 bg-rose-500 hover:bg-rose-600 text-[10px] font-bold text-white rounded transition">Equipar</button>`
+                          : b.tipo === 'dulucks'
+                            ? `<button onclick="comprarBannerDulucks('${b.id}', ${b.costoDulucks})" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-[10px] font-bold text-slate-950 rounded transition">Comprar (${b.costoDulucks} 🍀)</button>`
+                            : `<span class="text-[10px] font-semibold text-slate-600">Bloqueado</span>`
+                      }
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function equiparBanner(bannerId) {
+      if (!activeUID) return;
+      await db.ref(`users/${activeUID}/info/banner_equipado`).set(bannerId);
+    }
+
+    async function equiparColorPastel(pastelId) {
+      if (!activeUID) return;
+      await db.ref(`users/${activeUID}/info/pastel_equipado`).set(pastelId);
+      await db.ref(`users/${activeUID}/info/banner_equipado`).set("");
+    }
+
+    async function comprarBannerDulucks(bannerId, costo) {
+      const misDulucks = currentUserData?.inventario?.dulucks || 0;
+      if (misDulucks < costo) { alert("No tienes suficientes Dulucks (🍀)."); return; }
+      if (!confirm(`¿Adquirir este banner por ${costo} Dulucks?`)) return;
+
+      await db.ref(`users/${activeUID}/inventario/dulucks`).set(misDulucks - costo);
+      await db.ref(`users/${activeUID}/banners_comprados/${bannerId}`).set(true);
+      await db.ref(`users/${activeUID}/info/banner_equipado`).set(bannerId);
+    }
+
+    function renderBannersModule(container) {
+      container.innerHTML = `
+        <div class="max-w-4xl mx-auto space-y-4">
+          <div class="flex items-center justify-between">
+            <button onclick="closeTool()" class="text-xs font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1">
+              ← Volver al Hub
+            </button>
+            <span class="text-xs font-mono text-slate-500">PERSONALIZACIÓN DE PERFIL</span>
+          </div>
+          ${renderBannersInterface()}
+        </div>
+      `;
+    }
+
+    function renderLogrosInterface() {
+      const userLogros = currentUserData?.logros || {};
+      return `
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${LISTA_LOGROS_JOPJOIR.map(l => {
+            const item = userLogros[l.id];
+            let desbloqueado = false;
+            let valor = 0;
+            if (typeof item === "object" && item !== null) { desbloqueado = !!(item.unlocked ?? item.desbloqueado); valor = Number(item.val ?? item.valor ?? 0); }
+            else if (typeof item === "boolean") { desbloqueado = item; if (item) valor = l.meta; }
+            else if (typeof item === "number") { desbloqueado = item >= l.meta; valor = item; }
+
+            const pct = Math.min(100, Math.round((valor / l.meta) * 100));
+            return `
+              <div class="p-3.5 rounded-xl border ${desbloqueado ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[#161c28] border-slate-800'} space-y-2">
+                <div class="flex items-center justify-between">
+                  <strong class="text-xs text-white">${l.titulo}</strong>
+                  <span class="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase ${desbloqueado ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400'}">${l.rareza}</span>
+                </div>
+                <p class="text-[11px] text-slate-400">${l.desc}</p>
+                <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                  <div class="h-full ${desbloqueado ? 'bg-amber-400' : 'bg-rose-500'}" style="width:${desbloqueado ? 100 : pct}%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] font-mono text-slate-500">
+                  <span>${desbloqueado ? 'Completado' : 'En progreso'}</span>
+                  <span>${valor} /${l.meta}</span>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    function renderLogrosModule(container) {
+      container.innerHTML = `
+        <div class="max-w-4xl mx-auto space-y-4">
+          <div class="flex items-center justify-between">
+            <button onclick="closeTool()" class="text-xs font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1">
+              ← Volver al Hub
+            </button>
+            <span class="text-xs font-mono text-slate-500">REGISTRO DE LOGROS</span>
+          </div>
+          ${renderLogrosInterface()}
+        </div>
+      `;
+    }
+
+    // ============================================================
+    // 10. CONTROLADORES GENERALES
+    // ============================================================
+    function openAuthModal() { document.getElementById("auth-modal").classList.remove("hidden"); }
+    function closeAuthModal() { document.getElementById("auth-modal").classList.add("hidden"); }
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      document.getElementById("tab-login").classList.toggle("bg-rose-500", mode === "login");
+      document.getElementById("tab-login").classList.toggle("text-white", mode === "login");
+      document.getElementById("tab-login").classList.toggle("text-slate-400", mode !== "login");
+
+      document.getElementById("tab-register").classList.toggle("bg-rose-500", mode === "register");
+      document.getElementById("tab-register").classList.toggle("text-white", mode === "register");
+      document.getElementById("tab-register").classList.toggle("text-slate-400", mode !== "register");
+
+      document.getElementById("auth-email-group").classList.toggle("hidden", mode === "login");
+      document.getElementById("auth-submit-btn").textContent = mode === "register" ? "Crear Cuenta" : "Iniciar Sesión";
+    }
+
+    async function handleAuth(e) {
+      e.preventDefault();
+      const txt_user = document.getElementById("auth-user").value.trim();
+      const txt_pass = document.getElementById("auth-pass").value;
+      const txt_email = document.getElementById("auth-email").value.trim();
+      const msg = document.getElementById("auth-msg");
+      const user_clean = cleanUsername(txt_user);
+
+      msg.className = "text-center text-xs font-semibold text-amber-400";
+      msg.textContent = "Conectando...";
+
+      if (authMode === "login") {
+        try {
+          const snap = await db.ref('usernames/' + user_clean).once('value');
+          const userData = snap.val();
+          if (userData && userData.pass === txt_pass) {
+            loginSuccess(userData.uid, txt_user);
+          } else {
+            msg.className = "text-center text-xs font-semibold text-rose-400";
+            msg.textContent = userData ? "Contraseña incorrecta." : "El usuario no existe.";
+          }
+        } catch (err) {
+          msg.className = "text-center text-xs font-semibold text-rose-400";
+          msg.textContent = "Error de conexión.";
+        }
+      } else {
+        try {
+          const snap = await db.ref('usernames/' + user_clean).once('value');
+          if (snap.exists()) {
+            msg.className = "text-center text-xs font-semibold text-rose-400";
+            msg.textContent = "Nombre ya en uso.";
+            return;
+          }
+          const now = new Date();
+          const uid = `usr_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}${Math.floor(100000 + Math.random() * 900000)}`;
+
+          await db.ref('usernames/' + user_clean).set({ uid: uid, email: txt_email, pass: txt_pass });
+          await db.ref('users/' + uid).set({
+            info: { username: txt_user, email: txt_email, avatar: "", rol: user_clean === "catteru2" ? "admin" : "user", pastel_equipado: "pastel_aurora" },
+            inventario: { enjoirs: 0, dulucks: 0, tickets: 0 },
+            stats: { nivel: 1, racha_maxima: 0, total_partidas: 0, total_victorias: 0, total_asesinatos: 0 }
+          });
+          loginSuccess(uid, txt_user);
+        } catch (err) {
+          msg.className = "text-center text-xs font-semibold text-rose-400";
+          msg.textContent = "Error al crear cuenta.";
+        }
+      }
+    }
+
+    function loginSuccess(uid, username) {
+      activeUID = uid;
+      currentUsername = username;
+      localStorage.setItem("jopjoir_uid", uid);
+      localStorage.setItem("jopjoir_username", username);
+
+      closeAuthModal();
+      db.ref('users/' + uid).on('value', (snap) => {
+        currentUserData = snap.val() || null;
+        updateUserHeader();
+        renderMainContent();
+      });
+    }
+
+    function logout() {
+      localStorage.removeItem("jopjoir_uid");
+      localStorage.removeItem("jopjoir_username");
+      activeUID = null;
+      currentUsername = null;
+      currentUserData = null;
+      updateUserHeader();
+      renderMainContent();
+    }
+
+    function selectGame(id) {
+      activeGameId = id;
+      activeSubTool = null;
+      renderTabs();
+      renderMainContent();
+    }
+
+    function openTool(toolId) {
+      if (toolId === "ranking" || toolId === "checkin" || toolId === "characters" || toolId === "map" || toolId === "achieve" || toolId === "banners") {
+        activeSubTool = toolId;
+      } else if (toolId === "community") {
+        setNavigationTab("feed");
+        return;
+      } else if (toolId === "play") {
+        window.open("https://play.google.com/store/apps/details?id=com.dugick.jopjoir&hl=es", "_blank");
+        return;
+      } else {
+        alert("Módulo en preparación.");
+        return;
+      }
+      renderMainContent();
+    }
+
+    function closeTool() {
+      activeSubTool = null;
+      renderMainContent();
+    }
+
+    function setNavigationTab(view) {
+      activeTab = view;
+      activeSubTool = null;
+
+      document.querySelectorAll(".nav-desktop-btn").forEach(btn => {
+        const isMatch = btn.dataset.view === view;
+        btn.classList.toggle("text-rose-500", isMatch);
+        btn.classList.toggle("bg-rose-500/10", isMatch);
+        btn.classList.toggle("text-slate-400", !isMatch);
+      });
+
+      document.querySelectorAll(".nav-bottom-btn").forEach(btn => {
+        const isMatch = btn.dataset.view === view;
+        btn.classList.toggle("text-rose-500", isMatch);
+        btn.classList.toggle("text-slate-400", !isMatch);
+      });
+
+      renderMainContent();
+    }
+
+    document.querySelectorAll(".nav-desktop-btn, .nav-bottom-btn").forEach(btn => {
+      btn.addEventListener("click", () => setNavigationTab(btn.dataset.view));
+    });
+
+    const adminModal = document.getElementById("admin-modal");
+    document.getElementById("btn-open-admin").onclick = () => {
+      renderAdminToggles();
+      adminModal.classList.remove("hidden");
+    };
+    document.getElementById("btn-close-admin").onclick = () => {
+      adminModal.classList.add("hidden");
+    };
+
+    function renderAdminToggles() {
+      const list = document.getElementById("admin-toggles-list");
+      list.innerHTML = gamesData.map(game => `
+        <label class="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-slate-800 cursor-pointer">
+          <span class="text-xs font-bold text-slate-200">${game.name}</span>
+          <input type="checkbox" onchange="toggleGameVisibility('${game.id}', this.checked)" ${game.isEnabled ? 'checked' : ''} class="w-4 h-4 accent-rose-500">
+        </label>
+      `).join("");
+    }
+
+    window.toggleGameVisibility = function(id, isChecked) {
+      const g = gamesData.find(item => item.id === id);
+      if (g) {
+        g.isEnabled = isChecked;
+        renderTabs();
+        renderMainContent();
+      }
+    };
+
+    // Arranque
+    renderTabs();
+    updateUserHeader();
+    renderMainContent();
+  </script>
+</body>
+</html>
